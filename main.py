@@ -1,5 +1,6 @@
 from pydoc import plain
 
+import numpy as np
 import pygame, math
 from pygame import *
 from math import *
@@ -113,6 +114,43 @@ class StarSystem:
         self.planets = new_star_system.planets
         return new_star_system
 
+    def update_biman(self):
+        new_star_system = StarSystem(self.timer)
+        for planet in self.planets:
+            new_star_system.add(planet.copy())
+
+        prev_accs_arr = np.empty(shape=[len(self.planets),len(self.planets),2])
+
+        if (self.timer.get_n_steps() < 1):
+            for i in range(len(self.planets)):
+                for j in range(len(self.planets)):
+                    if i == j:
+                        continue
+                    else:
+                        new_star_system.planets[i] = new_star_system.planets[i].interact_eulerkramer(self.planets[j],
+                                                                                               self.timer.get_time_step())
+                        r = sqrt((self.planets[i].x - self.planets[j].x) ** 2 + (self.planets[j].y - self.planets[i].y) ** 2)
+                        prev_accs_arr[i,j,0] = self.planets[j].mass * (self.planets[j].x - self.planets[i].x) / r ** 3
+                        prev_accs_arr[i, j, 1] = self.planets[j].mass * (self.planets[j].y - self.planets[i].y) / r ** 3
+                new_star_system.planets[i].prev_state = self.planets[i]
+        else:
+            for i in range(len(self.planets)):
+                for j in range(len(self.planets)):
+                    if i == j:
+                        continue
+                    else:
+                        r = sqrt(
+                            (self.planets[i].x - self.planets[j].x) ** 2 + (self.planets[j].y - self.planets[i].y) ** 2)
+                        prev_accs_arr[i, j, 0] = self.planets[j].mass * (self.planets[j].x - self.planets[i].x) / r ** 3
+                        prev_accs_arr[i, j, 1] = self.planets[j].mass * (self.planets[j].y - self.planets[i].y) / r ** 3
+                        new_star_system.planets[i] = new_star_system.planets[i].interact_biman_spatial(self.planets[j],
+                                                                                               self.timer.get_time_step())
+                        new_star_system.planets[i] = new_star_system.planets[i].interact_biman_vel(new_star_system.planets[j],
+                                                                                                       self.timer.get_time_step(),
+                                                                                                   prev_accs_arr[i,j,0], prev_accs_arr[i,j,1])
+        self.planets = new_star_system.planets
+        return new_star_system
+
 class PlanetaryObject:
     def __init__(self, mass:float, x=0.0, y=0.0, vx=0.0, vy=0.0, ax=0.0, ay=0.0, curr_color=DEFAULT_COLOR):
         self.prev_state = None
@@ -216,6 +254,46 @@ class PlanetaryObject:
         self.prev_state = None
         return new_state
 
+    def interact_biman_spatial(self, planet, step):
+        new_state = PlanetaryObject(self.mass, self.x, self.y, self.vx, self.vy, self.ax, self.ay, self.color)
+
+        r = sqrt((self.x - planet.x) ** 2 + (self.y - planet.y) ** 2)
+
+        new_state.ax = planet.mass * (planet.x - self.x) / r ** 3
+        new_state.ay = planet.mass * (planet.y - self.y) / r ** 3
+
+        r_prev = sqrt((self.prev_state.x - planet.prev_state.x) ** 2 + (self.prev_state.y - planet.prev_state.y) ** 2)
+
+        ax_prev = planet.mass * (planet.prev_state.x - self.prev_state.x) / r_prev ** 3
+        ay_prev = planet.mass * (planet.prev_state.y - self.prev_state.y) / r_prev ** 3
+
+        # New pos based on speed
+        new_state.x = self.x + self.vx * step - (1/6)*(4*new_state.ax-ax_prev)*(step**2)
+        new_state.y = self.y + self.vy * step - (1/6)*(4*new_state.ay-ay_prev)*(step**2)
+        new_state.prev_state = self
+        self.prev_state = None
+        return new_state
+
+    def interact_biman_vel(self, planet, step, prev_acc_x, prev_acc_y):
+        new_state = PlanetaryObject(self.mass, self.x, self.y, self.vx, self.vy, self.ax, self.ay, self.color)
+
+        r = sqrt((self.x - planet.x) ** 2 + (self.y - planet.y) ** 2)
+
+        new_state.ax = planet.mass * (planet.x - self.x) / r ** 3
+        new_state.ay = planet.mass * (planet.y - self.y) / r ** 3
+
+        r_prev = sqrt((self.prev_state.x - planet.prev_state.x) ** 2 + (self.prev_state.y - planet.prev_state.y) ** 2)
+
+        ax_prev = planet.mass * (planet.prev_state.x - self.prev_state.x) / r_prev ** 3
+        ay_prev = planet.mass * (planet.prev_state.y - self.prev_state.y) / r_prev ** 3
+
+        new_state.vx = self.vx + (1 / 6) * (2 * new_state.ax + 5*ax_prev - prev_acc_x)*step
+        new_state.vy = self.vy + (1 / 6) * (2 * new_state.ay + 5 * ay_prev - prev_acc_y) * step
+
+        new_state.prev_state = self
+        self.prev_state = None
+        return new_state
+
 # Stop conditions
 CRASH_DIST = 10
 OUT_DIST = 1000
@@ -252,7 +330,7 @@ def main():
                 done = True
                 break
         for i in range(UPF):
-            star_system.update_verle()
+            star_system.update_biman()
             time_clock.tick()
         # screen.blit(bg, (0, 0))
         for i in range(len(star_system.planets)):
