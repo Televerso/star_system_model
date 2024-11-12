@@ -100,7 +100,7 @@ class StarSystem:
                         continue
                     else:
                         new_star_system.planets[i] = new_star_system.planets[i].interact_eulerkramer(self.planets[j],
-                                                                                               self.timer.get_time_step())
+                                                                                               self.timer.get_time_step()/2)
                 new_star_system.planets[i].prev_state = self.planets[i]
         else:
             for i in range(len(self.planets)):
