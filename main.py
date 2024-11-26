@@ -1,9 +1,13 @@
-from pydoc import plain
-
+from tkinter import *
+from tkinter import ttk
+import re
 import numpy as np
 import pygame, math
+from numpy.random import weibull
 from pygame import *
 from math import *
+
+pygame.init()
 
 WIN_WIDTH = 800
 WIN_HEIGHT = 640
@@ -16,6 +20,131 @@ FRAMERATE = 30
 UPF = 200
 timer = pygame.time.Clock()
 TIME_STEP = 0.005
+
+FONT = pygame.font.Font(None, 32)
+COLOR_TEXT_INACTIVE = pygame.Color('lightskyblue3')
+COLOR_TEXT_ACTIVE = pygame.Color('dodgerblue2')
+
+class ParameterDialogueWindow(Tk):
+    def __init__(self, n):
+        super().__init__()
+        self.title("Ввод параметров")
+        self.geometry("700x300")
+
+        self.label = Label(text="Ввод параметров системы:")  # создаем текстовую метку
+        self.label.pack(anchor="n", fill="x")  # размещаем метку в окне
+
+        self.frame = ttk.Frame(borderwidth=1, relief=SOLID, padding=[8, 10])
+        N_PARAMS = 5
+        weight = 1
+
+        for i in range(n):
+            self.columnconfigure(i, weight=weight)
+        for param in range(N_PARAMS):
+            self.rowconfigure(param, weight=weight)
+
+        check = (self.register(self.is_valid), "%P")
+
+        self.errmsg = StringVar()
+
+        self.entry_list = [[ttk.Entry(self.frame, validate="key", validatecommand=check) for i in range(N_PARAMS)] for j in range(n)]
+
+        ttk.Label(self.frame, text='x').grid(row=0, column=1)
+        ttk.Label(self.frame, text='y').grid(row=0, column=2)
+        ttk.Label(self.frame, text='vx').grid(row=0, column=3)
+        ttk.Label(self.frame, text='vy').grid(row=0, column=4)
+        ttk.Label(self.frame, text='Масса').grid(row=0, column=5)
+
+        for i in range(0, n):
+            ttk.Label(self.frame, text=str("Тело №")+str(i+1)).grid(row=i+1, column=0)
+
+        for i in range(0, n):
+            for param in range(0, N_PARAMS):
+                self.entry_list[i][param].grid(row = i+1, column = param+1)
+
+        self.frame.pack(fill="x", expand=True)
+
+        self.btn = ttk.Button(self, text="Ввод")
+        self.btn["command"] = self.click_button
+        self.btn.pack(anchor="s")
+
+    def is_valid(self, newval):
+        result = re.match("^\d+$", newval) is not None
+        if not result and len(newval) <= 12:
+            self.errmsg.set("Номер телефона должен быть в формате +xxxxxxxxxxx, где x представляет цифру")
+        else:
+            self.errmsg.set("")
+        return result
+
+    def click_button(self):
+        param_list = [{"mass":0,
+                "x": 0,
+                "y": 0,
+                "vx": 0,
+                "vy": 0,
+                "vx12": 0,
+                "vy12": 0,
+                "ax": 0,
+                "ay": 0,
+                "color": 0} for i in range(len(self.entry_list))]
+        for i in range(len(self.entry_list)):
+            param_list[i]["x"] = int(self.entry_list[i][0].get())
+            param_list[i]["y"] = int(self.entry_list[i][0].get())
+            param_list[i]["vx"] = int(self.entry_list[i][0].get())
+            param_list[i]["vy"] = int(self.entry_list[i][0].get())
+            param_list[i]["mass"] = int(self.entry_list[i][0].get())
+        self.close()
+        return self
+
+    def open(self):
+        self.mainloop()
+
+    def close(self):
+        self.destroy()
+
+class InputBox:
+    def __init__(self, x, y, w, h, text=''):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.color = COLOR_TEXT_INACTIVE
+        self.text = text
+        self.txt_surface = FONT.render(text, True, self.color)
+        self.active = False
+
+    def handle_event(self, event):
+        box_text = ''
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            # If the user clicked on the input_box rect.
+            if self.rect.collidepoint(event.pos):
+                # Toggle the active variable.
+                self.active = not self.active
+            else:
+                self.active = False
+            # Change the current color of the input box.
+            self.color = COLOR_TEXT_ACTIVE if self.active else COLOR_TEXT_INACTIVE
+        if event.type == pygame.KEYDOWN:
+            if self.active:
+                if event.key == pygame.K_RETURN:
+                    box_text = self.text
+                    self.text = ''
+                elif event.key == pygame.K_BACKSPACE:
+                    self.text = self.text[:-1]
+                else:
+                    self.text += event.unicode
+                # Re-render the text.
+                self.txt_surface = FONT.render(self.text, True, self.color)
+        return box_text
+
+    def update(self):
+        # Resize the box if the text is too long.
+        width = max(200, self.txt_surface.get_width()+10)
+        self.rect.w = width
+
+    def draw(self, screen):
+        # Blit the text.
+        screen.blit(self.txt_surface, (self.rect.x+5, self.rect.y+5))
+        # Blit the rect.
+        pygame.draw.rect(screen, self.color, self.rect, 2)
+
 
 class TimeClock:
     def __init__(self, time_step):
@@ -84,7 +213,6 @@ class StarSystem:
             for j in range(len(self.planets)):
                 if i == j: continue
                 else: new_star_system.planets[i] = new_star_system.planets[i].interact_halfstep(self.planets[j],
-                                                                                                self.timer.get_time_passed(),
                                                                                                 self.timer.get_time_step())
         self.planets = new_star_system.planets
         return new_star_system
@@ -100,7 +228,7 @@ class StarSystem:
                     if i == j:
                         continue
                     else:
-                        new_star_system.planets[i] = new_star_system.planets[i].interact_eulerkramer(self.planets[j],
+                        new_star_system.planets[i] = new_star_system.planets[i].interact_halfstep(self.planets[j],
                                                                                                self.timer.get_time_step()/2)
                 new_star_system.planets[i].prev_state = self.planets[i]
         else:
@@ -220,7 +348,7 @@ class PlanetaryObject:
         new_state.y += new_state.vy*step
         return new_state
 
-    def interact_halfstep(self, planet, passed, step):
+    def interact_halfstep(self, planet, step):
         new_state = PlanetaryObject(self.mass, self.x, self.y, self.vx, self.vy, self.ax, self.ay, self.color)
         r = sqrt((self.x - planet.x) ** 2 + (self.y - planet.y) ** 2)
 
@@ -301,7 +429,6 @@ OUT_DIST = 1000
 
 def main():
     # PyGame init
-    pygame.init()
     screen = pygame.display.set_mode(DISPLAY)
     pygame.display.set_caption("Solar Mechanics v0.1")
 
@@ -322,6 +449,11 @@ def main():
     star_system.add(planet1)
     star_system.add(sun)
 
+    input_box = InputBox(10,10,120,40)
+    input_boxes = [input_box]
+
+    n = 3
+
     done = False
     while not done:
         timer.tick(FRAMERATE)
@@ -329,13 +461,28 @@ def main():
             if e.type == QUIT:
                 done = True
                 break
+            for box in input_boxes:
+                box_text = box.handle_event(e)
+                if '0' < box_text <= '9':
+                    n = int(box_text)
+                    root = ParameterDialogueWindow(n)
+                    root.open()
+
+
+        for box in input_boxes:
+            box.update()
+
         for i in range(UPF):
-            star_system.update_biman()
+            star_system.update_eulerkramer()
             time_clock.tick()
-        # screen.blit(bg, (0, 0))
+        screen.blit(bg, (0, 0))
         for i in range(len(star_system.planets)):
             screen.blit(star_system.planets[i].image, (int(star_system.planets[i].x-star_system.planets[i].width/2),
                                                        int(star_system.planets[i].y-star_system.planets[i].height/2)))
+
+        for box in input_boxes:
+            box.draw(screen)
+
         pygame.display.update()
 
         # if r < CRASH_DIST:
