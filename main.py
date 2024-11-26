@@ -15,7 +15,18 @@ PLANET_WIDTH = 20
 PLANET_HEIGHT = 20
 DISPLAY = (WIN_WIDTH, WIN_HEIGHT)
 SPACE_COLOR = "#000022"
-DEFAULT_COLOR = "blue"
+COLOR_LIST = [
+    [0,0,255],
+[0,255,0],
+[255,255,0],
+[255,0,0],
+[255,0,255],
+[0,255,255],
+[128,0,255],
+[128,128,128],
+[255,128,0],
+[128,255,0]
+]
 FRAMERATE = 30
 UPF = 200
 timer = pygame.time.Clock()
@@ -48,6 +59,16 @@ class ParameterDialogueWindow(Tk):
         self.errmsg = StringVar()
 
         self.entry_list = [[ttk.Entry(self.frame, validate="key", validatecommand=check) for i in range(N_PARAMS)] for j in range(n)]
+        self.param_list = [{"mass": 0,
+                       "x": 0,
+                       "y": 0,
+                       "vx": 0,
+                       "vy": 0,
+                       "vx12": 0,
+                       "vy12": 0,
+                       "ax": 0,
+                       "ay": 0,
+                       "color": pygame.Color(COLOR_LIST[i])} for i in range(len(self.entry_list))]
 
         ttk.Label(self.frame, text='x').grid(row=0, column=1)
         ttk.Label(self.frame, text='y').grid(row=0, column=2)
@@ -77,22 +98,12 @@ class ParameterDialogueWindow(Tk):
         return result
 
     def click_button(self):
-        param_list = [{"mass":0,
-                "x": 0,
-                "y": 0,
-                "vx": 0,
-                "vy": 0,
-                "vx12": 0,
-                "vy12": 0,
-                "ax": 0,
-                "ay": 0,
-                "color": 0} for i in range(len(self.entry_list))]
         for i in range(len(self.entry_list)):
-            param_list[i]["x"] = int(self.entry_list[i][0].get())
-            param_list[i]["y"] = int(self.entry_list[i][0].get())
-            param_list[i]["vx"] = int(self.entry_list[i][0].get())
-            param_list[i]["vy"] = int(self.entry_list[i][0].get())
-            param_list[i]["mass"] = int(self.entry_list[i][0].get())
+            self.param_list[i]["x"] = int(self.entry_list[i][0].get())
+            self.param_list[i]["y"] = int(self.entry_list[i][1].get())
+            self.param_list[i]["vx"] = int(self.entry_list[i][2].get())
+            self.param_list[i]["vy"] = int(self.entry_list[i][3].get())
+            self.param_list[i]["mass"] = int(self.entry_list[i][4].get())
         self.close()
         return self
 
@@ -100,7 +111,9 @@ class ParameterDialogueWindow(Tk):
         self.mainloop()
 
     def close(self):
+        param_list = self.param_list
         self.destroy()
+        return param_list
 
 class InputBox:
     def __init__(self, x, y, w, h, text=''):
@@ -222,14 +235,14 @@ class StarSystem:
         for planet in self.planets:
             new_star_system.add(planet.copy())
 
-        if (self.timer.get_n_steps() < 2):
+        if (self.timer.get_n_steps() < 1):
             for i in range(len(self.planets)):
                 for j in range(len(self.planets)):
                     if i == j:
                         continue
                     else:
-                        new_star_system.planets[i] = new_star_system.planets[i].interact_halfstep(self.planets[j],
-                                                                                               self.timer.get_time_step()/2)
+                        new_star_system.planets[i] = new_star_system.planets[i].interact_eulerkramer(self.planets[j],
+                                                                                               self.timer.get_time_step()/3)
                 new_star_system.planets[i].prev_state = self.planets[i]
         else:
             for i in range(len(self.planets)):
@@ -279,8 +292,61 @@ class StarSystem:
         self.planets = new_star_system.planets
         return new_star_system
 
+    def update_collision(self):
+        in_update = [False,0,0]
+        for i in range(len(self.planets)):
+            for j in range(len(self.planets)):
+                if i >= j: continue
+                else:
+                    r = sqrt((self.planets[i].x - self.planets[j].x) ** 2 + (self.planets[i].y - self.planets[j].y) ** 2)
+                    margin_range = (sqrt(self.planets[i].mass/2) + sqrt(self.planets[j].mass/2))/2
+                    if r < margin_range:
+                        in_update[0] = True
+                        in_update[1] = i
+                        in_update[2] = j
+
+        if in_update[0]:
+            new_star_system = StarSystem(self.timer)
+            for i in range(len(self.planets)):
+                if i == in_update[1]: continue
+                if i == in_update[2]: continue
+                else: new_star_system.add(self.planets[i].copy())
+
+            mass = self.planets[in_update[1]].mass + self.planets[in_update[2]].mass
+            x = ((self.planets[in_update[1]].x * self.planets[in_update[1]].mass +
+                                  self.planets[in_update[2]].x * self.planets[in_update[2]].mass) /
+                                 mass)
+            y = ((self.planets[in_update[1]].y * self.planets[in_update[1]].mass +
+                                  self.planets[in_update[2]].y * self.planets[in_update[2]].mass) /
+                                 mass)
+            vx = ((self.planets[in_update[1]].prev_state.vx * self.planets[in_update[1]].mass +
+                  self.planets[in_update[2]].prev_state.vx * self.planets[in_update[2]].mass) /
+                  (mass))
+            vy = ((self.planets[in_update[1]].prev_state.vy * self.planets[in_update[1]].mass +
+                   self.planets[in_update[2]].prev_state.vy * self.planets[in_update[2]].mass) /
+                  (mass))
+            ax = 0
+            ay = 0
+            color_planet = pygame.Color(0, 0, 0)
+            color_planet.r = int((self.planets[in_update[1]].color.r * self.planets[in_update[1]].mass +
+                   self.planets[in_update[2]].color.r * self.planets[in_update[2]].mass) /
+                  mass)
+            color_planet.g = int((self.planets[in_update[1]].color.g * self.planets[in_update[1]].mass +
+                               self.planets[in_update[2]].color.g * self.planets[in_update[2]].mass) /
+                              mass)
+            color_planet.b = int((self.planets[in_update[1]].color.b * self.planets[in_update[1]].mass +
+                               self.planets[in_update[2]].color.b * self.planets[in_update[2]].mass) /
+                              mass)
+
+            new_star_system.add(PlanetaryObject(x = x, y = y, vx = vx, vy = vy, ax = ax, ay = ay, mass = mass, curr_color = color_planet))
+            self.planets = new_star_system.planets
+            self.update_eulerkramer()
+            return new_star_system
+        else:
+            return self
+
 class PlanetaryObject:
-    def __init__(self, mass:float, x=0.0, y=0.0, vx=0.0, vy=0.0, ax=0.0, ay=0.0, curr_color=DEFAULT_COLOR):
+    def __init__(self, mass:float, x=0.0, y=0.0, vx=0.0, vy=0.0, ax=0.0, ay=0.0, curr_color = Color(COLOR_LIST[0])):
         self.prev_state = None
         self.x = x
         self.y = y
@@ -291,7 +357,7 @@ class PlanetaryObject:
         self.vy12 = 0
         self.ax = ax
         self.ay = ay
-        self.color = curr_color
+        self.color = Color(curr_color)
         self.width, self.height = sqrt(mass/2), sqrt(mass/2)
         self.image = Surface((self.width, self.height))
         self.image.fill(Color(SPACE_COLOR))
@@ -330,6 +396,8 @@ class PlanetaryObject:
         # New pos based on speed
         new_state.x += self.vx*step
         new_state.y += self.vy*step
+        new_state.prev_state=self
+        self.prev_state = None
         return new_state
 
     def interact_eulerkramer(self, planet, step):
@@ -346,6 +414,8 @@ class PlanetaryObject:
         # New pos based on speed
         new_state.x += new_state.vx*step
         new_state.y += new_state.vy*step
+        new_state.prev_state = self
+        self.prev_state = None
         return new_state
 
     def interact_halfstep(self, planet, step):
@@ -437,10 +507,13 @@ def main():
     bg.fill(Color(SPACE_COLOR))
 
     # Planet init
-    planet = PlanetaryObject(x = 100, y = 290, vx = 0.1, vy = 3, ax = 0, ay = 0, mass = 100, curr_color = "blue")
-    planet1 = PlanetaryObject(x=WIN_WIDTH-100, y=WIN_HEIGHT-290, vx=-0.1, vy=-3, ax=0, ay=0, mass=200, curr_color="green")
+    planet = PlanetaryObject(x = 100, y = 290, vx = 0.1, vy = 3, ax = 0, ay = 0, mass = 100, curr_color = Color(COLOR_LIST[0]))
+    planet1 = PlanetaryObject(x=WIN_WIDTH-100, y=WIN_HEIGHT-290, vx=-0.1, vy=-3, ax=0, ay=0, mass=200, curr_color = Color(COLOR_LIST[1]))
     # Sun
-    sun = PlanetaryObject(x = WIN_WIDTH // 2, y = WIN_HEIGHT // 2, vx = 0, vy = 0, ax = 0, ay = 0, mass = 5000, curr_color = "yellow")
+    sun = PlanetaryObject(x = 50 + WIN_WIDTH // 2, y = 50 + WIN_HEIGHT // 2, vx = -2, vy = 2, ax = 0, ay = 0, mass = 5000, curr_color = Color(COLOR_LIST[2]))
+
+    sun1 = PlanetaryObject(x=-50 + WIN_WIDTH // 2, y=-50 + WIN_HEIGHT // 2, vx=2, vy=-2, ax=0, ay=0, mass=5000,
+                          curr_color=Color(COLOR_LIST[3]))
 
     time_clock = TimeClock(TIME_STEP)
 
@@ -448,6 +521,7 @@ def main():
     star_system.add(planet)
     star_system.add(planet1)
     star_system.add(sun)
+    star_system.add(sun1)
 
     input_box = InputBox(10,10,120,40)
     input_boxes = [input_box]
@@ -467,13 +541,15 @@ def main():
                     n = int(box_text)
                     root = ParameterDialogueWindow(n)
                     root.open()
-
+                    params = root.param_list
+                    print(params)
 
         for box in input_boxes:
             box.update()
 
         for i in range(UPF):
-            star_system.update_eulerkramer()
+            star_system.update_verle()
+            star_system.update_collision()
             time_clock.tick()
         screen.blit(bg, (0, 0))
         for i in range(len(star_system.planets)):
