@@ -1,9 +1,12 @@
+from platform import system
 from tkinter import *
 from tkinter import ttk
 import re
+from tkinter.tix import LabelEntry
+from tkinter.ttk import Labelframe
+
 import numpy as np
-import pygame, math
-from numpy.random import weibull
+import pygame
 from pygame import *
 from math import *
 
@@ -16,9 +19,9 @@ PLANET_HEIGHT = 20
 DISPLAY = (WIN_WIDTH, WIN_HEIGHT)
 SPACE_COLOR = "#000022"
 COLOR_LIST = [
-    [0,0,255],
-[0,255,0],
 [255,255,0],
+[0,0,255],
+[0,255,0],
 [255,0,0],
 [255,0,255],
 [0,255,255],
@@ -27,12 +30,20 @@ COLOR_LIST = [
 [255,128,0],
 [128,255,0]
 ]
+N_PARAMS = 5
+PARAM_LIST = [
+[WIN_WIDTH // 2, WIN_HEIGHT // 2, 0, 0, 5000], # The sun
+    [100, 290, 0.1, 3, 100], # Planet 1
+    [WIN_WIDTH-100, WIN_HEIGHT-290, -0.1, -3, 200], # Planet 2
+    [WIN_WIDTH // 2, WIN_HEIGHT, 3, 0, 50], # Planet 3
+    [WIN_WIDTH // 2, 0, -4, -0.1, 50] # Planet 4
+]
+
 FRAMERATE = 30
-UPF = 200
 timer = pygame.time.Clock()
-TIME_STEP = 0.005
 
 FONT = pygame.font.Font(None, 32)
+LABEL_FONT = pygame.font.Font(None, 16)
 COLOR_TEXT_INACTIVE = pygame.Color('lightskyblue3')
 COLOR_TEXT_ACTIVE = pygame.Color('dodgerblue2')
 
@@ -46,7 +57,6 @@ class ParameterDialogueWindow(Tk):
         self.label.pack(anchor="n", fill="x")  # размещаем метку в окне
 
         self.frame = ttk.Frame(borderwidth=1, relief=SOLID, padding=[8, 10])
-        N_PARAMS = 5
         weight = 1
 
         for i in range(n):
@@ -59,15 +69,15 @@ class ParameterDialogueWindow(Tk):
         self.errmsg = StringVar()
 
         self.entry_list = [[ttk.Entry(self.frame, validate="key", validatecommand=check) for i in range(N_PARAMS)] for j in range(n)]
-        self.param_list = [{"mass": 0,
-                       "x": 0,
-                       "y": 0,
-                       "vx": 0,
-                       "vy": 0,
-                       "vx12": 0,
-                       "vy12": 0,
-                       "ax": 0,
-                       "ay": 0,
+        self.param_list = [{"mass": 0.0,
+                       "x": 0.0,
+                       "y": 0.0,
+                       "vx": 0.0,
+                       "vy": 0.0,
+                       "vx12": 0.0,
+                       "vy12": 0.0,
+                       "ax": 0.0,
+                       "ay": 0.0,
                        "color": pygame.Color(COLOR_LIST[i])} for i in range(len(self.entry_list))]
 
         ttk.Label(self.frame, text='x').grid(row=0, column=1)
@@ -82,6 +92,7 @@ class ParameterDialogueWindow(Tk):
         for i in range(0, n):
             for param in range(0, N_PARAMS):
                 self.entry_list[i][param].grid(row = i+1, column = param+1)
+                self.entry_list[i][param].insert(0, str(PARAM_LIST[i][param]))
 
         self.frame.pack(fill="x", expand=True)
 
@@ -90,7 +101,7 @@ class ParameterDialogueWindow(Tk):
         self.btn.pack(anchor="s")
 
     def is_valid(self, newval):
-        result = re.match("^\d+$", newval) is not None
+        result = re.match("^-?\d+\.?\d*$", newval) is not None
         if not result and len(newval) <= 12:
             self.errmsg.set("Номер телефона должен быть в формате +xxxxxxxxxxx, где x представляет цифру")
         else:
@@ -99,11 +110,11 @@ class ParameterDialogueWindow(Tk):
 
     def click_button(self):
         for i in range(len(self.entry_list)):
-            self.param_list[i]["x"] = int(self.entry_list[i][0].get())
-            self.param_list[i]["y"] = int(self.entry_list[i][1].get())
-            self.param_list[i]["vx"] = int(self.entry_list[i][2].get())
-            self.param_list[i]["vy"] = int(self.entry_list[i][3].get())
-            self.param_list[i]["mass"] = int(self.entry_list[i][4].get())
+            self.param_list[i]["x"] = float(self.entry_list[i][0].get())
+            self.param_list[i]["y"] = float(self.entry_list[i][1].get())
+            self.param_list[i]["vx"] = float(self.entry_list[i][2].get())
+            self.param_list[i]["vy"] = float(self.entry_list[i][3].get())
+            self.param_list[i]["mass"] = float(self.entry_list[i][4].get())
         self.close()
         return self
 
@@ -158,16 +169,18 @@ class InputBox:
         # Blit the rect.
         pygame.draw.rect(screen, self.color, self.rect, 2)
 
-
 class TimeClock:
-    def __init__(self, time_step):
+    def __init__(self, time_step_loc):
         self.time_passed = 0
         self.n_steps = 0
-        self.time_step = time_step
+        self.time_step = time_step_loc
 
     def tick(self):
         self.time_passed += self.time_step
         self.n_steps += 1
+
+    def set_time_step(self, time_step):
+        self.time_step = time_step
 
     def get_time_passed(self):
         return self.time_passed
@@ -177,6 +190,10 @@ class TimeClock:
 
     def get_n_steps(self):
         return self.n_steps
+
+    def reset(self):
+        self.time_passed = 0
+        self.n_steps = 0
 
 class StarSystem:
     def __init__(self, star_timer : TimeClock, planets=None):
@@ -262,7 +279,7 @@ class StarSystem:
 
         prev_accs_arr = np.empty(shape=[len(self.planets),len(self.planets),2])
 
-        if (self.timer.get_n_steps() < 1):
+        if (self.timer.get_n_steps() < 2):
             for i in range(len(self.planets)):
                 for j in range(len(self.planets)):
                     if i == j:
@@ -492,10 +509,8 @@ class PlanetaryObject:
         self.prev_state = None
         return new_state
 
-# Stop conditions
-CRASH_DIST = 10
-OUT_DIST = 1000
-
+# TODO pause button
+# TODO fix verle with collision
 
 def main():
     # PyGame init
@@ -503,30 +518,33 @@ def main():
     pygame.display.set_caption("Solar Mechanics v0.1")
 
     # Space init
-    bg = Surface((WIN_WIDTH, WIN_HEIGHT))
+    bg = Surface((WIN_WIDTH-200, WIN_HEIGHT))
     bg.fill(Color(SPACE_COLOR))
 
-    # Planet init
-    planet = PlanetaryObject(x = 100, y = 290, vx = 0.1, vy = 3, ax = 0, ay = 0, mass = 100, curr_color = Color(COLOR_LIST[0]))
-    planet1 = PlanetaryObject(x=WIN_WIDTH-100, y=WIN_HEIGHT-290, vx=-0.1, vy=-3, ax=0, ay=0, mass=200, curr_color = Color(COLOR_LIST[1]))
-    # Sun
-    sun = PlanetaryObject(x = 50 + WIN_WIDTH // 2, y = 50 + WIN_HEIGHT // 2, vx = -2, vy = 2, ax = 0, ay = 0, mass = 5000, curr_color = Color(COLOR_LIST[2]))
+    label_bg = Surface((200, WIN_HEIGHT))
+    label_bg.fill(Color(Color(200, 200, 200)))
 
-    sun1 = PlanetaryObject(x=-50 + WIN_WIDTH // 2, y=-50 + WIN_HEIGHT // 2, vx=2, vy=-2, ax=0, ay=0, mass=5000,
-                          curr_color=Color(COLOR_LIST[3]))
+    time_step = 0.005
+    time_clock = TimeClock(time_step)
 
-    time_clock = TimeClock(TIME_STEP)
+    ups_input_box = InputBox(0, WIN_HEIGHT-260, 80, 40)
+    step_input_box = InputBox(0, WIN_HEIGHT-180, 80, 40)
+    n_planet_box = InputBox(0, WIN_HEIGHT-100, 80, 40)
 
+    input_boxes = [ ups_input_box, step_input_box, n_planet_box]
+
+    n = 0
+    planets = []
     star_system = StarSystem(time_clock)
-    star_system.add(planet)
-    star_system.add(planet1)
-    star_system.add(sun)
-    star_system.add(sun1)
 
-    input_box = InputBox(10,10,120,40)
-    input_boxes = [input_box]
+    upf_system = 1
 
-    n = 3
+    ups_label = LABEL_FONT.render(str("Текущий UPS = " + str(upf_system*30)), True, COLOR_TEXT_ACTIVE)
+    step_label = LABEL_FONT.render(str("Текущий шаг = " + str(time_step)), True, COLOR_TEXT_ACTIVE)
+    system_label = LABEL_FONT.render("Редактирование системы:", True, COLOR_TEXT_ACTIVE)
+    n_planet_label = LABEL_FONT.render("Количество планет: " + str(str(n)), True, COLOR_TEXT_ACTIVE)
+
+    labels = [ups_label, step_label, system_label, n_planet_label]
 
     done = False
     while not done:
@@ -535,27 +553,59 @@ def main():
             if e.type == QUIT:
                 done = True
                 break
-            for box in input_boxes:
-                box_text = box.handle_event(e)
-                if '0' < box_text <= '9':
-                    n = int(box_text)
-                    root = ParameterDialogueWindow(n)
-                    root.open()
-                    params = root.param_list
-                    print(params)
+
+            ups_box_text = ups_input_box.handle_event(e)
+            if ups_box_text.isdigit() and (30 < int(ups_box_text) <= 10000):
+                upf_system = int(int(ups_box_text)/30)
+
+            step_box_text = step_input_box.handle_event(e)
+            if step_box_text.isdigit() and 0 < int(step_box_text) <= 10000:
+                time_step = round(int(step_box_text) / 3600, 5)
+                time_clock.set_time_step(time_step)
+
+            n_planet_box_text = n_planet_box.handle_event(e)
+            if n_planet_box_text.isdigit() and 0 < int(n_planet_box_text) <= 5:
+                n = int(n_planet_box_text)
+                root = ParameterDialogueWindow(n)
+                root.open()
+                params = root.param_list
+                time_clock = TimeClock(time_step)
+                star_system = StarSystem(time_clock)
+                for i in range(n):
+                    planet = PlanetaryObject(mass=params[i].get("mass"),
+                                             x=params[i].get("x"),
+                                             y=params[i].get("y"),
+                                             vx=params[i].get("vx"),
+                                             vy=params[i].get("vy"),
+                                             ax=params[i].get("ax"),
+                                             ay=params[i].get("ay"),
+                                             curr_color=params[i].get("color"))
+                    star_system.add(planet)
+
+
 
         for box in input_boxes:
             box.update()
 
-        for i in range(UPF):
-            star_system.update_verle()
+        for i in range(upf_system):
+            star_system.update_biman()
             star_system.update_collision()
             time_clock.tick()
-        screen.blit(bg, (0, 0))
+        screen.blit(bg, (200, 0))
         for i in range(len(star_system.planets)):
             screen.blit(star_system.planets[i].image, (int(star_system.planets[i].x-star_system.planets[i].width/2),
                                                        int(star_system.planets[i].y-star_system.planets[i].height/2)))
 
+
+        ups_label = LABEL_FONT.render(str("Текущий UPS = " + str(upf_system*30)), True, COLOR_TEXT_ACTIVE)
+        step_label = LABEL_FONT.render(str("Текущий шаг = " + str(time_step)), True, COLOR_TEXT_ACTIVE)
+        n_planet_label = LABEL_FONT.render("Количество планет: " + str(str(n)), True, COLOR_TEXT_ACTIVE)
+
+        screen.blit(label_bg, (0, 0))
+        screen.blit(ups_label, (10, WIN_HEIGHT - 280))
+        screen.blit(step_label, (10, WIN_HEIGHT - 200))
+        screen.blit(system_label, (10, WIN_HEIGHT - 120))
+        screen.blit(n_planet_label, (10, WIN_HEIGHT - 60))
         for box in input_boxes:
             box.draw(screen)
 

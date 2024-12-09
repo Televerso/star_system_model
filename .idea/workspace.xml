@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="7e1d0d41-4816-4506-a063-7eff32e26b8b" name="Changes" comment="Progress on input window">
+    <list default="true" id="7e1d0d41-4816-4506-a063-7eff32e26b8b" name="Changes" comment="collision work">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
@@ -94,7 +94,9 @@
       <workItem from="1730043727690" duration="8824000" />
       <workItem from="1730193608022" duration="17247000" />
       <workItem from="1731488573900" duration="1783000" />
-      <workItem from="1732611272101" duration="17435000" />
+      <workItem from="1732611272101" duration="17459000" />
+      <workItem from="1732635138900" duration="325000" />
+      <workItem from="1733743168002" duration="9751000" />
     </task>
     <task id="LOCAL-00001" summary="classes">
       <option name="closed" value="true" />
@@ -136,7 +138,15 @@
       <option name="project" value="LOCAL" />
       <updated>1732620316259</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="collision work">
+      <option name="closed" value="true" />
+      <created>1732631880366</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1732631880366</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -147,9 +157,10 @@
     <MESSAGE value="Verle working icannotbeliveit" />
     <MESSAGE value="Biman done. But it disgusts me. Gonna need some changes" />
     <MESSAGE value="Progress on input window" />
-    <option name="LAST_COMMIT_MESSAGE" value="Progress on input window" />
+    <MESSAGE value="collision work" />
+    <option name="LAST_COMMIT_MESSAGE" value="collision work" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/star_system_model$main.coverage" NAME="main Coverage Results" MODIFIED="1732631850704" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/star_system_model$main.coverage" NAME="main Coverage Results" MODIFIED="1733752384080" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
